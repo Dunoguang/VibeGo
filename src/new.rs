@@ -75,7 +75,11 @@ pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
         source: source.to_string(),
         created: now,
         host_data,
-        cmd: "/usr/lib/systemd/systemd".to_string(),
+        cmd: if has_systemd {
+            "/usr/lib/systemd/systemd".to_string()
+        } else {
+            "/bin/sh".to_string()
+        },
     };
     if let Err(e) = config::save(&c) {
         eprintln!("写 config.json 失败: {}", e);

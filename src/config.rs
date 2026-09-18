@@ -29,7 +29,14 @@ impl Container {
     }
     pub fn read_pid(&self) -> Option<i32> {
         let s = std::fs::read_to_string(self.pid_file()).ok()?;
-        s.trim().parse::<i32>().ok()
+        s.split_whitespace().next()?.parse::<i32>().ok()
+    }
+
+    fn pid_starttime(&self) -> Option<u64> {
+        let s = std::fs::read_to_string(self.pid_file()).ok()?;
+        let mut it = s.split_whitespace();
+        it.next()?;
+        it.next().and_then(|x| x.parse::<u64>().ok())
     }
     /// pid 文件里的进程是否真的还活着（顺带防 PID 复用）
     pub fn running(&self) -> bool {
@@ -40,19 +47,17 @@ impl Container {
         if pid <= 1 {
             return false;
         }
-        let k = unsafe { libc::kill(pid, 0) };
-        if k != 0 {
-            let e = std::io::Error::last_os_error()
-                .raw_os_error();
-            return e == Some(libc::EPERM);
+        if unsafe { libc::kill(pid, 0) } != 0 {
+            return false;
         }
-        match std::fs::read(format!("/proc/{}/cmdline", pid)) {
-            Ok(b) => {
-                let s = String::from_utf8_lossy(&b).to_string();
-                s.contains("vibego") || s.contains("systemd")
-            }
-            Err(_) => false,
+        let want = match self.pid_starttime() {
+            Some(t) => t,
+            None => return true,
+        };
+        if want == 0 {
+            return true;
         }
+        starttime_of(pid).map(|cur| cur == want).unwrap_or(false)
     }
     pub fn uptime_str(&self) -> String {
         if !self.running() {
@@ -62,15 +67,7 @@ impl Container {
             Some(p) => p,
             None => return "-".into(),
         };
-        let st = std::fs::read_to_string(format!("/proc/{}/stat", p));
-        let st = match st {
-            Ok(s) => s,
-            Err(_) => return "-".into(),
-        };
-        // 字段 22 是 starttime（ticks）
-        let mut it = st.rsplit(')').next().unwrap_or("").split(' ');
-        let ticks: u64 = it.nth(19).and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+        let ticks: u64 = starttime_of(p).unwrap_or(0);
         let up = std::fs::read_to_string("/proc/uptime")
             .ok()
             .and_then(|s| s.split(' ').next()
@@ -89,6 +86,13 @@ impl Container {
 pub struct Registry {
     pub version: u32,
     pub containers: BTreeMap<String, String>,
+}
+
+/// /proc/<pid>/stat 第 22 字段（starttime，ticks）用于防 PID 复用
+pub fn starttime_of(pid: i32) -> Option<u64> {
+    let st = std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()?;
+    let after = st.rsplit(')').next()?;
+    after.split_whitespace().nth(19).and_then(|x| x.parse::<u64>().ok())
 }
 
 pub fn base_dir(arg: Option<&str>) -> String {

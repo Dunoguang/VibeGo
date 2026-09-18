@@ -163,7 +163,9 @@ fn launch(c: &Container, prog: &str, notify: Option<RawFd>, shell: bool)
         child_main(c, &rootfs, prog, &mut log, shell)
     }
 
-    if let Err(e) = std::fs::write(c.pid_file(), format!("{}\n", pid)) {
+    let stt = crate::config::starttime_of(pid).unwrap_or(0);
+    if let Err(e) = std::fs::write(c.pid_file(),
+                                  format!("{} {}\n", pid, stt)) {
         if let Some(l) = log.as_mut() {
             let _ = writeln!(l, "write pid failed: {}", e);
         }
@@ -259,7 +261,7 @@ fn child_main(c: &Container, rootfs: &str, prog: &str,
         libc::sigprocmask(libc::SIG_SETMASK, &e, std::ptr::null_mut());
     }
     step!(log, "MS_REC|MS_PRIVATE /", mount_priv());
-    step!(log, "bind rootfs 0h*h:+",
+    step!(log, "bind rootfs self (bind mount)",
           mnt(rootfs, rootfs, "", libc::MS_BIND | libc::MS_REC, None));
     step!(log, "mkdir rootfs/dev", mkdir_p(&format!("{}/dev", rootfs)));
     step!(log, "bind /dev 进容器",
@@ -427,9 +429,10 @@ fn exec_final(prog: &str, log: &mut Option<std::fs::File>, shell: bool)
     env.push(util::cstr("container=vibego"));
     let mut args: Vec<std::ffi::CString> = Vec::new();
     args.push(util::cstr(prog));
+    let is_systemd = prog.ends_with("systemd");
     if shell {
         args.push(util::cstr("-i"));
-    } else {
+    } else if is_systemd {
         let kmsg = std::path::Path::new("/dev/kmsg").exists();
         args.push(util::cstr("--system"));
         args.push(util::cstr(if kmsg {
