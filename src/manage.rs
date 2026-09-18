@@ -3,29 +3,60 @@ use crate::config::{self, Container};
 use crate::util;
 use std::io::{Read, Write};
 
-pub fn stop(c: &Container, timeout: u64) -> i32 {
+pub fn stop(c: &Container, timeout: u64, graceful: bool) -> i32 {
     if !c.running() {
         println!("容器 {} 没在运行", c.name);
         let _ = std::fs::remove_file(c.pid_file());
         return 0;
     }
     let pid = c.read_pid().unwrap_or(0);
-    println!("停止容器 {}（pid {}）...", c.name, pid);
-    unsafe { libc::kill(pid, libc::SIGTERM) };
-    let t0 = std::time::Instant::now();
-    while t0.elapsed().as_secs() < timeout {
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        if !c.running() {
-            println!("已停止");
+    // 优雅路径：容器内有 systemd 就用 systemctl exit —— 这是 systemd
+    // 给容器用的命令，走正常关机流程后让 PID1 退出，不会调内核 reboot()
+    if graceful {
+        let sc = format!("{}/usr/bin/systemctl", c.rootfs());
+        if std::path::Path::new(&sc).exists() {
+            println!("优雅关机：容器内 systemctl exit 0");
+            let args = vec![
+                "/usr/bin/systemctl".to_string(),
+                "--no-block".to_string(),
+                "exit".to_string(),
+                "0".to_string(),
+            ];
+            let _ = crate::enter::enter(c, &args);
+        } else {
+            println!("容器里没有 systemctl，跳过优雅关机");
+        }
+        if wait_gone(c, timeout) {
+            println!("已优雅停止");
             let _ = std::fs::remove_file(c.pid_file());
             return 0;
         }
+        println!("优雅关机超时 {}s，转常规停止", timeout);
     }
-    println!("超时 {}s，SIGKILL", timeout);
+    println!("停止容器 {}（pid {}）...", c.name, pid);
+    unsafe { libc::kill(pid, libc::SIGTERM) };
+    if wait_gone(c, 5) {
+        println!("已停止（SIGTERM）");
+        let _ = std::fs::remove_file(c.pid_file());
+        return 0;
+    }
+    println!("SIGTERM 无效（PID1 忽略），改 SIGKILL");
     unsafe { libc::kill(pid, libc::SIGKILL) };
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    let _ = wait_gone(c, 3);
     let _ = std::fs::remove_file(c.pid_file());
     0
+}
+
+/// 等容器退出，返回是否已退出
+fn wait_gone(c: &Container, secs: u64) -> bool {
+    let t0 = std::time::Instant::now();
+    while t0.elapsed().as_secs() < secs {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        if !c.running() {
+            return true;
+        }
+    }
+    !c.running()
 }
 
 pub fn list(base: &str) -> i32 {

@@ -17,7 +17,7 @@ vibego 0.1.0 - Android 上的 PID1 容器运行器（systemd as PID 1）
   vibego new   --name NAME --source FILE [--path DIR] [--host-data]
   vibego start NAME [-f|--foreground] [--shell]
   vibego enter NAME [-- CMD...]
-  vibego stop  NAME [--timeout SEC]
+  vibego stop  NAME [--timeout SEC] [--graceful]
   vibego list
   vibego logs  NAME [-f|--follow] [--lines N]
   vibego rm    NAME [--force]
@@ -160,7 +160,7 @@ fn main() -> ExitCode {
                 let t = arg_val(&args, "--timeout")
                     .and_then(|s| s.parse::<u64>().ok())
                     .unwrap_or(15);
-                manage::stop(&c, t)
+                manage::stop(&c, t, has_flag(&args, "--graceful"))
             }
             Err(e) => {
                 eprintln!("{}", e);
