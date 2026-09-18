@@ -90,6 +90,7 @@ pub fn run(o: &Opts) -> i32 {
 
     // systemd 的日志通道（实测：只重定向 stdout/stderr 看不到任何东西）
     r.section("1. 日志通道");
+    let kmsg = std::path::Path::new("/dev/kmsg").exists();
     let kmsg_msg = if kmsg {
         "存在：--log-target=kmsg 可用".to_string()
     } else {

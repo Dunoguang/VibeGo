@@ -49,9 +49,10 @@ fn unpack_xz(source: &str, dest: &str, log: &mut std::fs::File)
 {
     let tmp = format!("{}/../.unpack.tmp.tar", dest);
     let _ = writeln!(log, "unpack: xz 先解到临时文件 {}", tmp);
-    let mut fi = std::fs::File::open(source).map_err(|e| format!("{}", e))?;
+    let fi = std::fs::File::open(source).map_err(|e| format!("{}", e))?;
     let mut fo = std::fs::File::create(&tmp).map_err(|e| format!("{}", e))?;
-    lzma_rs::xz_decompress(&mut fi, &mut fo)
+    let mut br = std::io::BufReader::new(fi);
+    lzma_rs::xz_decompress(&mut br, &mut fo)
         .map_err(|e| format!("xz 解压失败: {:?}", e))?;
     drop(fo);
     let r = {

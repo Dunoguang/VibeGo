@@ -344,7 +344,16 @@ fn child_main(c: &Container, rootfs: &str, prog: &str,
             }
         }
     }
-    prepare::prepare("/", log);
+    match log.as_mut() {
+        Some(f) => prepare::prepare("/", f),
+        None => {
+            if let Ok(mut dn) = std::fs::OpenOptions::new()
+                .write(true).open("/dev/null")
+            {
+                prepare::prepare("/", &mut dn);
+            }
+        }
+    }
     exec_final(prog, log, shell)
 }
 
@@ -389,7 +398,11 @@ fn pivot(rootfs: &str) -> Result<(), String> {
     std::fs::create_dir_all(old).map_err(|e| format!("{}", e))?;
     let c_new = util::cstr(".");
     let c_old = util::cstr(old);
-    if unsafe { libc::pivot_root(c_new.as_ptr(), c_old.as_ptr()) } != 0 {
+    let pr = unsafe {
+        libc::syscall(libc::SYS_pivot_root, c_new.as_ptr(),
+                     c_old.as_ptr())
+    };
+    if pr != 0 {
         return Err(util::errno_text());
     }
     std::env::set_current_dir("/").map_err(|e| format!("{}", e))?;
