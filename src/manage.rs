@@ -22,7 +22,17 @@ pub fn stop(c: &Container, timeout: u64, graceful: bool) -> i32 {
                 "exit".to_string(),
                 "0".to_string(),
             ];
-            let _ = crate::enter::enter(c, &args);
+            // enter() 会 setns 到容器的 mount ns，会污染调用者自己的
+            // 挂载视图（之后 pid 文件等路径全部解析错）→ 必须在子进程里做
+            let fp = unsafe { libc::fork() };
+            if fp == 0 {
+                let _ = crate::enter::enter(c, &args);
+                unsafe { libc::_exit(0) }
+            }
+            if fp > 0 {
+                let mut st = 0;
+                unsafe { libc::waitpid(fp, &mut st, 0) };
+            }
         } else {
             println!("容器里没有 systemctl，跳过优雅关机");
         }
