@@ -249,6 +249,34 @@ fn supervise(pid: libc::pid_t, log: &mut Option<std::fs::File>) -> i32 {
     }
 }
 
+/// 容器 /dev 是从宿主 bind 来的，带着宿主的挂载（cgroup v1 的
+/// /dev/cpuset /dev/memcg、binderfs、usb-ffs ...），容器内 root 能写
+/// 它们会影响宿主。在私有 mount ns 内全部卸掉（对外面无影响），
+/// 之后我们再挂自己的 /dev/pts /dev/shm /dev/mqueue。
+/// 注意：必须在 pivot_root 之后调用，路径才是容器视角的 /dev/*。
+fn hide_dev_mounts(log: &mut Option<std::fs::File>) {
+    let mi = std::fs::read_to_string("/proc/self/mountinfo")
+        .unwrap_or_default();
+    let mut n = 0;
+    for line in mi.lines() {
+        let p: Vec<&str> = line.splitn(2, " - ").collect();
+        if p.len() != 2 {
+            continue;
+        }
+        let mp = p[0].split_whitespace().nth(4).unwrap_or("");
+        if !mp.starts_with("/dev/") {
+            continue;
+        }
+        let c = util::cstr(mp);
+        if unsafe { libc::umount2(c.as_ptr(), libc::MNT_DETACH) } == 0 {
+            n += 1;
+        }
+    }
+    if let Some(l) = log.as_mut() {
+        let _ = writeln!(l, "  ok   hide host /dev mounts: {}", n);
+    }
+}
+
 fn child_main(c: &Container, rootfs: &str, prog: &str,
               log: &mut Option<std::fs::File>, shell: bool) -> ! {
     if let Some(l) = log.as_mut() {
@@ -279,6 +307,8 @@ fn child_main(c: &Container, rootfs: &str, prog: &str,
     step!(log, "mount proc",
           mnt("proc", "/proc", "proc",
               libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC, None));
+    // 必须在 /proc 重挂之后（否则读不到 mountinfo）
+    hide_dev_mounts(log);
     step!(log, "mkdir /sys", mkdir_p("/sys"));
     step!(log, "mount sysfs",
           mnt("sysfs", "/sys", "sysfs",
