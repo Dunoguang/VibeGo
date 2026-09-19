@@ -14,7 +14,7 @@ const USAGE: &str = "\
 vibego 0.1.0 - Android 上的 PID1 容器运行器（systemd as PID 1）
 
 用法:
-  vibego new   --name NAME --source FILE [--path DIR] [--host-data]
+  vibego new   --name NAME --source FILE [--path DIR] [--host-data] [--dns 8.8.8.8,114.114.114.114]
   vibego start NAME [-f|--foreground] [--shell]
   vibego enter NAME [-- CMD...]
   vibego stop  NAME [--timeout SEC] [--graceful]
@@ -29,6 +29,7 @@ vibego 0.1.0 - Android 上的 PID1 容器运行器（systemd as PID 1）
   start 默认后台（日志落 <path>/log/vibego.log）
   enter 默认 bash -il（无 bash 用 sh），也可 vibego enter X -- ls /
   net/user namespace 不动，容器直接用手机的网络
+  new 不传 --dns 时自动写宿主 DNS（dumpsys 探测），失败才用缺省
 ";
 
 /// probe 子命令用
@@ -52,8 +53,9 @@ fn has_flag(rest: &[String], key: &str) -> bool {
     rest.iter().any(|x| x == key)
 }
 
-const WITH_VAL: [&str; 6] =
-    ["--name", "--path", "--source", "--timeout", "--lines", "--base"];
+const WITH_VAL: [&str; 7] =
+    ["--name", "--path", "--source", "--timeout", "--lines", "--base",
+     "--dns"];
 
 fn first_pos(rest: &[String]) -> Option<String> {
     let mut i = 0;
@@ -130,6 +132,7 @@ fn main() -> ExitCode {
                     arg_val(&args, "--path").as_deref(),
                     &source,
                     !has_flag(&args, "--no-host-data"),
+                    arg_val(&args, "--dns").as_deref(),
                 ),
                 None => {
                     eprintln!("new 需要 --name 和 --source\n{}", USAGE);

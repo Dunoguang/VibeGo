@@ -23,6 +23,13 @@ pub fn cstr(s: &str) -> CString {
     CString::new(s).unwrap_or_else(|_| CString::new("").unwrap())
 }
 
+/// Termux/adb su 的宿主 shell 常带着 LD_PRELOAD 指向
+/// /data/data/.../libtermux-exec.so，进 chroot 后会动态链接器
+/// 一直刷 “cannot be preloaded ... ignored”。进容器前清掉。
+pub fn strip_preload() {
+    std::env::remove_var("LD_PRELOAD");
+}
+
 /// 直接 write(1)，绕开 std 缓冲（fork 后不会重复输出）
 pub fn out(line: &str) {
     let s = format!("{}\n", line);

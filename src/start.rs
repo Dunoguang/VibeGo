@@ -449,6 +449,7 @@ fn pivot(rootfs: &str) -> Result<(), String> {
 fn exec_final(prog: &str, log: &mut Option<std::fs::File>, shell: bool)
     -> !
 {
+    util::strip_preload();
     let mut env: Vec<std::ffi::CString> = Vec::new();
     for (k, v) in std::env::vars() {
         if k == "container" {

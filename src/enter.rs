@@ -42,6 +42,7 @@ pub fn enter(c: &Container, argv: &[String]) -> i32 {
         return 1;
     }
     if p == 0 {
+        util::strip_preload();
         // 容器里的工具在 /usr/bin 等，宿主 PATH 里没有，补上
         if Path::new("/usr/bin").is_dir() {
             let cur = std::env::var("PATH").unwrap_or_default();

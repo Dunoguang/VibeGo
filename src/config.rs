@@ -95,13 +95,6 @@ pub fn starttime_of(pid: i32) -> Option<u64> {
     after.split_whitespace().nth(19).and_then(|x| x.parse::<u64>().ok())
 }
 
-pub fn base_dir(arg: Option<&str>) -> String {
-    match arg {
-        Some(s) if !s.is_empty() => s.to_string(),
-        _ => DEFAULT_BASE.to_string(),
-    }
-}
-
 pub fn registry_file(base: &str) -> String {
     format!("{}/containers.conf", base)
 }

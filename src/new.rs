@@ -4,7 +4,7 @@ use crate::prepare;
 use std::io::Write;
 
 pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
-           host_data: bool) -> i32 {
+           host_data: bool, dns: Option<&str>) -> i32 {
     if let Err(e) = config::validate_name(name) {
         eprintln!("{}", e);
         return 2;
@@ -65,6 +65,8 @@ pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
         println!("警告：rootfs 里没找到 systemd，start 可能失败");
     }
     prepare::prepare(&rootfs, &mut log);
+    prepare::write_dns(&format!("{}/etc/resolv.conf", rootfs),
+                       &prepare::pick_dns(dns), &mut log);
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
