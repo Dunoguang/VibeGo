@@ -136,10 +136,12 @@ fn launch(c: &Container, prog: &str, notify: Option<RawFd>, shell: bool)
                          if shell { "shell 模式" } else { "systemd" });
     }
     block_signals();
+    // 最小隔离集：PID + Mount + UTS + Cgroup
+    // - UTS 保留：不然 systemd 的 sethostname() 会改掉宿主 hostname
+    // - IPC 不要：systemd 不依赖；容器内 IPC 与宿主共享无影响
     let flags = libc::CLONE_NEWNS
         | libc::CLONE_NEWPID
         | libc::CLONE_NEWUTS
-        | libc::CLONE_NEWIPC
         | libc::CLONE_NEWCGROUP;
     if unsafe { libc::unshare(flags) } != 0 {
         let e = util::errno_text();
@@ -323,10 +325,6 @@ fn child_main(c: &Container, rootfs: &str, prog: &str,
           mnt("tmpfs", "/dev/shm", "tmpfs",
               libc::MS_NOSUID | libc::MS_NODEV,
               Some("mode=1777,size=64m")));
-    step!(log, "mkdir /dev/mqueue", mkdir_p("/dev/mqueue"));
-    step!(log, "mount mqueue",
-          mnt("mqueue", "/dev/mqueue", "mqueue",
-              libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC, None));
     step!(log, "mkdir /run", mkdir_p("/run"));
     step!(log, "mount tmpfs /run",
           mnt("tmpfs", "/run", "tmpfs",

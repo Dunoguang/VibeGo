@@ -11,7 +11,7 @@ pub fn enter(c: &Container, argv: &[String]) -> i32 {
         return 1;
     }
     let pid = c.read_pid().unwrap_or(0);
-    let names = ["mnt", "uts", "ipc", "cgroup", "pid"];
+    let names = ["mnt", "uts", "cgroup", "pid"];
     let mut fds: Vec<libc::c_int> = Vec::new();
     for n in names {
         let p = format!("/proc/{}/ns/{}", pid, n);
