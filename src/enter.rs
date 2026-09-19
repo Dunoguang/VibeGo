@@ -73,7 +73,8 @@ pub fn enter(c: &Container, argv: &[String]) -> i32 {
         ap.push(std::ptr::null());
         let prog = args[0].to_string_lossy().into_owned();
         let cp = util::cstr(&prog);
-        unsafe { libc::execv(cp.as_ptr(), ap.as_ptr()) };
+        // execvp 会按 PATH 搜索（execv 不会，用户可能给裸命令名）
+        unsafe { libc::execvp(cp.as_ptr(), ap.as_ptr()) };
         eprintln!("exec {} 失败: {}", prog, util::errno_text());
         unsafe { libc::_exit(127) }
     }
