@@ -1,10 +1,11 @@
 //! new：创建容器（解包 + 准备基础文件 + 写 config + 注册）
 use crate::config::{self, Container};
+use crate::boot;
 use crate::prepare;
 use std::io::Write;
 
 pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
-           host_data: bool, dns: Option<&str>) -> i32 {
+           host_data: bool, dns: Option<&str>, autostart: bool) -> i32 {
     if let Err(e) = config::validate_name(name) {
         eprintln!("{}", e);
         return 2;
@@ -82,6 +83,7 @@ pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
         } else {
             "/bin/sh".to_string()
         },
+        autostart,
     };
     if let Err(e) = config::save(&c) {
         eprintln!("写 config.json 失败: {}", e);
@@ -91,6 +93,10 @@ pub fn new(base: &str, name: &str, path: Option<&str>, source: &str,
         eprintln!("写注册表失败: {}", e);
         return 1;
     }
+    boot::install(&mut log);
     println!("完成：vibego start {} / vibego enter {}", name, name);
+    if autostart {
+        println!("开机自启：已开启（vibego disable {} 可关）", name);
+    }
     0
 }

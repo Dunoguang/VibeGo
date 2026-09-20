@@ -142,3 +142,49 @@ pub fn rm(base: &str, c: &Container, force: bool) -> i32 {
     let _ = util::errno_text();
     0
 }
+
+/// 启动所有标了 autostart 的容器（给 service.d 调用）
+pub fn autostart(base: &str) -> i32 {
+    let v = config::list_all(base);
+    let mut n = 0;
+    for c in v {
+        if !c.autostart {
+            println!("{}: 未开自启，跳过", c.name);
+            continue;
+        }
+        if c.running() {
+            println!("{}: 已在运行，跳过", c.name);
+            continue;
+        }
+        let code = crate::start::start(&c, true, false);
+        println!("{}: start -> {}", c.name, code);
+        if code == 0 {
+            n += 1;
+        }
+    }
+    println!("autostart: 共启动 {} 个容器", n);
+    0
+}
+
+/// 开关某容器的开机自启
+pub fn set_autostart(c: &Container, on: bool) -> i32 {
+    let mut n = c.clone();
+    n.autostart = on;
+    match config::save(&n) {
+        Ok(_) => {
+            println!("容器 {} 开机自启 = {}", n.name,
+                     if on { "on" } else { "off" });
+            if on {
+                match crate::boot::install_to_disk() {
+                    Ok(p) => println!("已安装开机脚本 {}", p),
+                    Err(e) => eprintln!("装开机脚本失败: {}", e),
+                }
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("写 config.json 失败: {}", e);
+            1
+        }
+    }
+}

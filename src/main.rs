@@ -1,4 +1,5 @@
 //! vibego CLI
+mod boot;
 mod config;
 mod enter;
 mod manage;
@@ -21,6 +22,8 @@ vibego 0.1.0 - Android 上的 PID1 容器运行器（systemd as PID 1）
   vibego list
   vibego logs  NAME [-f|--follow] [--lines N]
   vibego rm    NAME [--force]
+  vibego enable NAME / disable NAME   # 开机自启开关
+  vibego autostart                     # 启动所有开了自启的容器
   vibego probe [--rootfs DIR]
 
 全局: --base DIR（默认 /data/VibeGo）
@@ -30,6 +33,7 @@ vibego 0.1.0 - Android 上的 PID1 容器运行器（systemd as PID 1）
   enter 默认 bash -il（无 bash 用 sh），也可 vibego enter X -- ls /
   net/user namespace 不动，容器直接用手机的网络
   new 不传 --dns 时自动写宿主 DNS（dumpsys 探测），失败才用缺省
+  new 默认开启开机自启（KSU service.d），--no-autostart 可关
 ";
 
 /// probe 子命令用
@@ -133,6 +137,7 @@ fn main() -> ExitCode {
                     &source,
                     !has_flag(&args, "--no-host-data"),
                     arg_val(&args, "--dns").as_deref(),
+                    !has_flag(&args, "--no-autostart"),
                 ),
                 None => {
                     eprintln!("new 需要 --name 和 --source\n{}", USAGE);
@@ -171,6 +176,21 @@ fn main() -> ExitCode {
             }
         },
         "list" | "ls" | "ps" => manage::list(&base),
+        "autostart" => manage::autostart(&base),
+        "enable" => match resolve_name(&base, &args) {
+            Ok(c) => manage::set_autostart(&c, true),
+            Err(e) => {
+                eprintln!("{}", e);
+                1
+            }
+        },
+        "disable" => match resolve_name(&base, &args) {
+            Ok(c) => manage::set_autostart(&c, false),
+            Err(e) => {
+                eprintln!("{}", e);
+                1
+            }
+        },
         "logs" => match resolve_name(&base, &args) {
             Ok(c) => {
                 let n = arg_val(&args, "--lines")

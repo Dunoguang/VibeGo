@@ -12,6 +12,12 @@ pub struct Container {
     pub created: u64,
     pub host_data: bool,
     pub cmd: String,
+    #[serde(default = "default_true")]
+    pub autostart: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Container {
