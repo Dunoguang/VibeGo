@@ -42,17 +42,13 @@ pub fn enter(c: &Container, argv: &[String]) -> i32 {
         return 1;
     }
     if p == 0 {
-        util::strip_preload();
-        // 容器里的工具在 /usr/bin 等，宿主 PATH 里没有，补上
-        if Path::new("/usr/bin").is_dir() {
-            let cur = std::env::var("PATH").unwrap_or_default();
-            let p1 = "/usr/local/sbin:/usr/local/bin:/usr/sbin";
-            let p2 = "/usr/bin:/sbin:/bin";
-            let base = format!("{}:{}", p1, p2);
-            std::env::set_var("PATH", format!("{}:{}", base, cur));
-            if !Path::new("/home").exists() {
-                std::env::set_var("HOME", "/root");
-            }
+        // 彻底清空环境，再只写入必要项（零继承）。TERM 属于交互
+        // 上下文，从当前终端显式取一次。
+        let term = std::env::var("TERM").ok();
+        let e = util::container_env(term.as_deref());
+        unsafe { libc::clearenv() };
+        for (k, v) in &e {
+            std::env::set_var(k, v);
         }
         let mut args: Vec<std::ffi::CString> = Vec::new();
         if argv.is_empty() {

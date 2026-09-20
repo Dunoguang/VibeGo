@@ -448,14 +448,12 @@ fn exec_final(prog: &str, log: &mut Option<std::fs::File>, shell: bool)
     -> !
 {
     util::strip_preload();
+    // 清空后只加必要项（零继承）：宿主 PATH=/system/bin、
+    // BOOTCLASSPATH、MY_*_ROOT、TMPDIR 等一个都不进容器
     let mut env: Vec<std::ffi::CString> = Vec::new();
-    for (k, v) in std::env::vars() {
-        if k == "container" {
-            continue;
-        }
+    for (k, v) in util::container_env(None) {
         env.push(util::cstr(&format!("{}={}", k, v)));
     }
-    env.push(util::cstr("container=vibego"));
     let mut args: Vec<std::ffi::CString> = Vec::new();
     args.push(util::cstr(prog));
     let is_systemd = prog.ends_with("systemd");

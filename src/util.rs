@@ -30,6 +30,29 @@ pub fn strip_preload() {
     std::env::remove_var("LD_PRELOAD");
 }
 
+/// 进入容器用的环境：**先清空、只加必要项**，不从宿主继承任何变量。
+/// 宿主是 Android，它的 PATH(/product/bin:/system/bin)、HOME(/)、
+/// TMPDIR、SHELL、HOSTNAME、BOOTCLASSPATH、MY_*_ROOT 全是宿主语境，
+/// 一继承就跟着进容器（继承后再过滤 = 语义上仍是宿主污染）。
+/// term 是"调用上下文"（交互终端类型），不算环境继承，由调用点显式给。
+pub fn container_env(term: Option<&str>) -> Vec<(String, String)> {
+    let path = "/usr/local/sbin:/usr/local/bin:/usr/sbin";
+    let shell = if std::path::Path::new("/bin/bash").exists() {
+        "/bin/bash"
+    } else {
+        "/bin/sh"
+    };
+    vec![
+        ("PATH".to_string(), format!("{}:/usr/bin:/sbin:/bin", path)),
+        ("HOME".to_string(), "/root".to_string()),
+        ("SHELL".to_string(), shell.to_string()),
+        ("LANG".to_string(), "C.UTF-8".to_string()),
+        ("container".to_string(), "vibego".to_string()),
+        ("TERM".to_string(),
+         term.unwrap_or("xterm-256color").to_string()),
+    ]
+}
+
 /// 直接 write(1)，绕开 std 缓冲（fork 后不会重复输出）
 pub fn out(line: &str) {
     let s = format!("{}\n", line);
